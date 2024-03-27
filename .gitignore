@@ -1,0 +1,7 @@
+# Ignore build artifacts
+**/*.obj
+**/*.map
+
+# Ignore executable
+**/*.exe
+
