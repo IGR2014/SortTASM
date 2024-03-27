@@ -11,13 +11,40 @@
 ; Data segment
 .DATA
 
+    ; LF
+    LF equ 0Ah
+    ; CR
+    CR equ 0Dh
+    ; SPACE
+    SPACE equ 20h
+    ; EOF
+    EOF equ 1Ah
+
+    ; Maximum lines count
+    MAX_LINE_COUNT equ 10000
+
     ; Line buffer size
     LINE_SIZE equ 32
+    ; Key buffer size
+    KEY_SIZE equ 16
+    ; Value buffer size
+    VALUE_SIZE equ 6
 
     ; Buffer to receive line
-    lineSize db LINE_SIZE
-    lineRead db ?
-    lineData db LINE_SIZE DUP('$'),'$'
+    dataLine db LINE_SIZE DUP('$'),'$'
+
+    ; Buffer for parsed key
+    dataKey db KEY_SIZE DUP('$'),'$'
+    ; Buffer for parsed value
+    dataValue db VALUE_SIZE DUP('$'),'$'
+
+    ; Received lines count
+    countLines dw 0
+
+    ; Keys
+    arrayKeys db LINE_SIZE*KEY_SIZE DUP('$'),'$'
+    ; Values
+    arrayValues dw LINE_SIZE DUP(0)
 
 
 ; Code segment
@@ -28,33 +55,89 @@
 
 ; Entry point
 start:
+    ; Segments setup
     mov ax, @data           ; Get CS
     mov ds, ax              ; Make DS point to CODE segment
     mov es, ax              ; Make ES point to CODE segment
     mov ss, ax              ; Make SS point to CODE segment
 
-    lea dx, lineSize
-    call read_string
-
-    lea dx, lineData
-    call print_string
+; Input loop
+loop_read:
+    lea dx, dataLine        ; Line receive buffer
+    call line_read          ; Do read line
+    cmp al, EOF             ; EOF ?
+    jz loop_read_exit       ; Done processing input
+    inc countLines          ; Increment lines count
+    call line_parse         ; Parse <key> <value>
+    jmp loop_read           ; Next line
+; Read loop done
+loop_read_exit:
+    ;lea dx, dataLine
+    ;call line_print
 
     call exit               ; Exit program
 
 
-; Read string function
-read_string proc
-    mov ah, 0Ah             ; DOS Read string
+; Read line function
+line_read proc
+    xor bx, bx              ; BX <-- 0
+; Read single char
+loop_read_char:
+    mov si, dx              ; Buffer address to SI
+    mov ah, 01h             ; DOS Read char
     int 21h                 ; DOS interrupt
+    cmp al, LF              ; LF ?
+    jz line_read_exit       ; Done
+    cmp al, CR              ; CR ?
+    jz line_read_exit       ; Done
+    cmp al, EOF             ; EOF ?
+    jz line_read_exit       ; Done
+    mov ds:[si + bx], al    ; Store char to temp storage
+    cmp bx, LINE_SIZE       ; Line filled ?
+    jz line_read_exit       ; Done
+    inc bx                  ; Next char
+    jmp loop_read_char      ; Continue loop
+; Read single char exit
+line_read_exit:
     ret                     ; Exit function
-read_string endp
+line_read endp
 
-; Print string function
-print_string proc
-    mov ah, 09h             ; DOS Print string
+; Print line function
+line_print proc
+    mov ah, 09h             ; DOS Print line
     int 21h                 ; DOS interrupt
     ret                     ; Exit function
-print_string endp
+line_print endp
+
+
+; Parse line function
+line_parse proc
+    xor bx, bx              ; BX <-- 0
+; Loop key parsing
+loop_parse_key:
+    lea dx, dataLine        ; Line buffer
+    mov si, dx              ; Line buffer address to SI
+    lea dx, arrayKeys       ; Key storage buffer
+    mov cx, countLines      ; Key storage buffer address to DI
+    imul cx, LINE_SIZE
+    add dx, cx
+    mov di, dx
+    mov al, ds:[si + bx]
+    cmp al, LF              ; LF ?
+    jz loop_parse_key_exit  ; Done
+    cmp al, CR              ; CR ?
+    jz loop_parse_key_exit  ; Done
+    cmp al, SPACE           ; SPACE ?
+    jz loop_parse_key_exit  ; Done
+    cmp al, EOF             ; EOF ?
+    mov ds:[di + bx], al    ; Copy key char to keys array
+    inc bx                  ; Next char
+    jmp loop_parse_key      ; Continue loop
+; Loop key parsing exit
+loop_parse_key_exit:
+    ret                     ; Exit function
+line_parse endp
+
 
 ; Exit function
 exit proc
