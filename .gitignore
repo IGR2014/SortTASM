@@ -2,6 +2,10 @@
 **/*.obj
 **/*.map
 
+# Ignore debugger artifacts
+**/*.tr
+**/*.td
+
 # Ignore executable
 **/*.exe
 

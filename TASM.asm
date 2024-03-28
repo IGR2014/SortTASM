@@ -31,6 +31,11 @@
     ; EOF
     EOF equ 1Ah
 
+    ; Maximum value
+    MAX_VALUE equ 10000
+    ; Minimum value
+    MIN_VALUE equ -10000
+
     ; Maximum lines count
     MAX_LINE_COUNT equ 10000
 
@@ -49,13 +54,18 @@
     ; Buffer for parsed value
     dataValue db VALUE_SIZE DUP(EOL),'$'
 
+    ; Parsed binary value
+    dataValueBin dw 0
+
     ; Received lines count
     countLines dw 0
 
     ; Keys
     arrayKeys db LINE_SIZE*KEY_SIZE DUP(EOL),'$'
-    ; Values
-    arrayValues dw LINE_SIZE DUP(0)
+    ; Average values
+    arrayAverage dw LINE_SIZE DUP(0)
+    ; Count values
+    arrayCount dw LINE_SIZE DUP(0)
 
 
 ; Code segment
@@ -205,12 +215,13 @@ line_parse proc
     xor bx, bx                      ; Reset line offset
     ; Parse key
     call key_parse                  ; Parse key
-    lea dx, dataKey
-    call line_print
+    ;lea dx, dataKey
+    ;call line_print
     ; Parse value
     call value_parse                ; Parse value
-    lea dx, dataValue
-    call line_print
+    ;lea dx, dataValue
+    ;call line_print
+    call decimal_convert            ; Convert value from dec to bin
     ; Exit
     ret                             ; Exit function
 line_parse endp
@@ -309,9 +320,51 @@ loop_value_parse:
 ; Loop value parsing exit
 loop_value_parse_exit:
     ; Store EOL
-    mov byte ptr ds:[di], EOL  ; Store EOL to temp storage
+    mov byte ptr ds:[di], EOL       ; Store EOL to temp storage
     ret                             ; Exit function
 value_parse endp
+
+
+; Convert decimal to binary
+decimal_convert proc
+    ; Offset
+    xor cx, cx                      ; Reset temporary value storage
+    xor bx, bx                      ; Reset value storage offset
+    ; Value storage
+    lea dx, dataValue               ; Value storage buffer
+    mov si, dx                      ; Value storage buffer address to SI
+    ; Remove any spaces
+    call skip_leading_spaces        ; Skip spaces
+; Loop decimal convert
+loop_decimal_convert:
+    ; Get char
+    movsx ax, byte ptr ds:[si + bx] ; Copy line char to AL
+    ; Check range
+    cmp ax, '0'                     ; Lower bound OK ?
+    jl loop_decimal_convert_exit    ; Done
+    cmp ax, '9'                     ; Upper bound OK ?
+    jg loop_decimal_convert_exit    ; Done
+    sub ax, '0'                     ; Convert ASCII char to digit
+    imul cx, 10                     ; Multiply value storage by 10
+    add cx, ax                      ; Add digit
+    cmp cx, MIN_VALUE               ; Lower bound OK ?
+    jl loop_decimal_convert_error   ; Done
+    cmp cx, MAX_VALUE               ; Upper bound OK ?
+    jg loop_decimal_convert_error   ; Done
+    inc bx                          ; Next char
+    cmp bx, VALUE_SIZE              ; Line end ?
+    jge loop_value_parse_exit       ; Done
+    jmp loop_decimal_convert        ; Continue loop
+; Loop decimal convert error
+loop_decimal_convert_error:
+    mov cx, 0000h                   ; Clear value in case of error
+; Loop decimal convert exit
+loop_decimal_convert_exit:
+    ; Store binary value
+    mov dataValueBin, cx            ; Store value
+    ret                             ; Exit function
+decimal_convert endp
+
 
 ; Program end
 END start
