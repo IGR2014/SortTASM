@@ -54,6 +54,8 @@
     ; Buffer for parsed value
     dataValue db VALUE_SIZE DUP(EOL),'$'
 
+    ; Parsed value sign
+    dataValueSign db 0
     ; Parsed binary value
     dataValueBin dw 0
 
@@ -67,10 +69,10 @@
     arrayKeys db LINE_SIZE*KEY_SIZE DUP(EOL),'$'
     ; Sum of key values
     arraySum dw  LINE_SIZE DUP(0)
-    ; Average values
-    arrayAverage dw LINE_SIZE DUP(0)
     ; Count values
     arrayCount dw LINE_SIZE DUP(0)
+    ; Average values
+    arrayAverage dw LINE_SIZE DUP(0)
 
 
 ; Code segment
@@ -185,6 +187,7 @@ loop_calc_average:
     ; Get key values sum
     lea di, arraySum                ; DI <-- Values sum from array
     mov ax, word ptr ds:[di + bx]   ; Get values sum
+    mov dx, 0000h                   ; DX <-- 0
     ; Get key values count
     lea di, arrayCount              ; DI <-- Values count from array
     mov cx, word ptr ds:[di + bx]   ; Get values count
@@ -199,6 +202,26 @@ loop_calc_average:
     jmp loop_calc_average           ; Continue loop
 ; Loop calc average end
 loop_calc_average_end:
+    ; Sort
+    call bubble_sort                ; Sort array
+    ; Print keys
+    xor cx, cx                      ; CX <-- 0
+; Loop print result
+loop_print_result:
+    ; Check keys
+    cmp cx, countKeys               ; Has more keys ?
+    jge loop_print_result_exit      ; Done
+    ; Print result
+    lea di, arrayKeys               ; DI <-- Key from array
+    mov bx, cx
+    imul bx, KEY_SIZE
+    lea dx, byte ptr ds:[di + bx]
+    call line_print                 ; Print current key
+    ; Next average calc
+    inc cx                          ; Next key
+    jmp loop_print_result           ; Continue loop
+; Loop print result exit
+loop_print_result_exit:
     ; Exit program
     mov al, 00h                     ; Exit code
     mov ax, 4C00h                   ; DOS exit program with AL = exit code
@@ -315,12 +338,8 @@ line_parse proc
     xor bx, bx                      ; Reset line offset
     ; Parse key
     call key_parse                  ; Parse key
-    ;lea dx, dataKey
-    ;call line_print
     ; Parse value
     call value_parse                ; Parse value
-    ;lea dx, dataValue
-    ;call line_print
     ; Exit
     ret                             ; Exit function
 line_parse endp
@@ -427,6 +446,8 @@ value_parse endp
 
 ; Convert decimal to binary
 decimal_convert proc
+    ; Sign
+    mov dataValueSign, FALSE        ; Forget sign
     ; Offset
     xor cx, cx                      ; Reset temporary value storage
     xor bx, bx                      ; Reset value storage offset
@@ -439,6 +460,12 @@ decimal_convert proc
 loop_decimal_convert:
     ; Get char
     movsx ax, byte ptr ds:[si + bx] ; Copy line char to AL
+    ; Sign check
+    cmp ax, '-'                     ; Negative ?
+    jne positive                    ; Positive
+    mov dataValueSign, TRUE         ; Remember sign
+; Positive sign
+positive:
     ; Check range
     cmp ax, '0'                     ; Lower bound OK ?
     jl loop_decimal_convert_exit    ; Done
@@ -460,6 +487,14 @@ loop_decimal_convert_error:
     mov cx, 0000h                   ; Clear value in case of error
 ; Loop decimal convert exit
 loop_decimal_convert_exit:
+    ; Check negative
+    cmp dataValueSign, TRUE         ; Negative sign ?
+    jne decimal_convert_done
+    ; Two's compliment
+    not cx                          ; Invert value
+    add cx, 0001h                   ; Add 1
+; Convert done
+decimal_convert_done:
     ; Store binary value
     mov dataValueBin, cx            ; Store value
     ret                             ; Exit function
@@ -486,6 +521,68 @@ string_compare_exit:
     ret                             ; Exit function
 string_compare endp
 
+
+; Sort
+bubble_sort proc
+    mov cx, word ptr countKeys      ; Array size
+    dec cx                          ; Decrement size
+; Loop outer
+outer:
+    push cx                         ; Remember CX on stack
+    lea si, arrayAverage            ; Array address
+; Loop inner
+inner:
+    mov ax, word ptr ds:[si]        ; Take element Nth
+    cmp ax, word ptr ds:[si + 2]    ; Compare with Nth + 2
+    jg next                         ; Next step if less
+    xchg word ptr ds:[si + 2], ax   ; Exchange elements
+    mov word ptr ds:[si], ax
+    ; Exchange keys
+    xor dx, dx                      ; DX <-- 0
+; Loop exchnage
+exchange:
+    ; Check keys
+    cmp dx, KEY_SIZE                ; Check size ?
+    jge exchange_exit               ; Done
+    ; Key 1
+    lea di, arrayKeys               ; DI <-- Key from array
+    mov bx, countKeys
+    sub bx, cx
+    shr bx, 01h
+    imul bx, KEY_SIZE
+    add bx, dx
+    mov al, byte ptr ds:[di + bx]   ; Take char
+    ; Key 2
+    lea di, arrayKeys               ; DI <-- Key from array
+    mov bx, countKeys
+    sub bx, cx
+    shr bx, 01h
+    inc bx
+    imul bx, KEY_SIZE
+    add bx, dx
+    ; Exchange bytes
+    xchg al, byte ptr ds:[di + bx]  ; Exchange chars
+    ; Key 1 again
+    lea di, arrayKeys               ; DI <-- Key from array
+    mov bx, countKeys
+    sub bx, cx
+    shr bx, 01h
+    imul bx, KEY_SIZE
+    add bx, dx
+    mov byte ptr ds:[di + bx], al   ; Store char
+    ; Continue exchange
+    inc dx                          ; Next char
+    jmp exchange                    ; Continue loop
+; Loop exchnage exit
+exchange_exit:
+; Next step
+next:
+    add si, 2                       ; CX <-- CX + 2
+    loop inner                      ; Continue loop
+    pop cx                          ; Restore CX from stack
+    loop outer                      ; Continue loop
+    ret                             ; Exit function
+bubble_sort endp
 
 ; Program end
 END start
