@@ -534,7 +534,7 @@ outer:
 inner:
     mov ax, word ptr ds:[si]        ; Take element Nth
     cmp ax, word ptr ds:[si + 2]    ; Compare with Nth + 2
-    jg next                         ; Next step if less
+    jg next                         ; Next step if greater
     xchg word ptr ds:[si + 2], ax   ; Exchange elements
     mov word ptr ds:[si], ax
     ; Exchange keys
@@ -546,29 +546,33 @@ exchange:
     jge exchange_exit               ; Done
     ; Key 1
     lea di, arrayKeys               ; DI <-- Key from array
-    mov bx, countKeys
-    sub bx, cx
-    shr bx, 01h
+    lea ax, arrayAverage
+    mov bx, si
+    sub bx, ax
     imul bx, KEY_SIZE
     add bx, dx
     mov al, byte ptr ds:[di + bx]   ; Take char
+    push ax                         ; Save AX
     ; Key 2
     lea di, arrayKeys               ; DI <-- Key from array
-    mov bx, countKeys
-    sub bx, cx
-    shr bx, 01h
+    lea ax, arrayAverage
+    mov bx, si
+    sub bx, ax
     inc bx
     imul bx, KEY_SIZE
     add bx, dx
+    pop ax                          ; Restore AX
     ; Exchange bytes
     xchg al, byte ptr ds:[di + bx]  ; Exchange chars
+    push ax                         ; Save AX
     ; Key 1 again
     lea di, arrayKeys               ; DI <-- Key from array
-    mov bx, countKeys
-    sub bx, cx
-    shr bx, 01h
+    lea ax, arrayAverage
+    mov bx, si
+    sub bx, ax
     imul bx, KEY_SIZE
     add bx, dx
+    pop ax                          ; Restore AX
     mov byte ptr ds:[di + bx], al   ; Store char
     ; Continue exchange
     inc dx                          ; Next char
